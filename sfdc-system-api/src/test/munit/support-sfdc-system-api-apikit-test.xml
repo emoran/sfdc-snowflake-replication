@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:tls="http://www.mulesoft.org/schema/mule/tls" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:munit="http://www.mulesoft.org/schema/mule/munit" xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd 
+http://www.mulesoft.org/schema/mule/tls http://www.mulesoft.org/schema/mule/tls/current/mule-tls.xsd">
+    <munit:config name="support-sfdc-system-api-apikit-test.xml" />
+    <http:request-config name="HTTP_Request_Configuration" basePath="/api/sfdc">
+        <http:request-connection host="localhost" port="9441" protocol="HTTPS">
+			<tls:context >
+				<tls:trust-store insecure="true" />
+				<tls:key-store type="pkcs12" path="dirohub.p12" keyPassword="${munit.tls.secret}" password="${munit.tls.secret}" />
+			</tls:context>
+		</http:request-connection>
+    </http:request-config>
+    <global-property doc:name="Global Property" doc:id="a8620bc9-1193-4732-81fe-dcb73a4c485a" name="env" value="staging" />
+	<global-property doc:name="Global Property" doc:id="a9571463-91c5-4c72-9588-971cac7fbfee" name="secure.key" value="MoranEncrypt2022" />
+	<munit:test name="post:\case:application\json:support-sfdc-system-api-config-201-application\json-FlowTest" description="Verifying functionality of [post:\case:application\json:support-sfdc-system-api-config-201-application\json]">
+        <munit:enable-flow-sources>
+            <munit:enable-flow-source value="support-sfdc-system-api-main" />
+            <munit:enable-flow-source value="post:\case:application\json:support-sfdc-system-api-config" />
+        </munit:enable-flow-sources>
+        <munit:behavior>
+            <set-payload value="#[MunitTools::getResourceAsString('scaffolder/request/post_case_application_json.json')]" />
+			<munit-tools:mock-when doc:name="Mock when" doc:id="116e75a8-190f-4747-ab72-bb99afac6c9d" processor="salesforce:create">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Create Case" attributeName="doc:name" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value='#[%dw 2.0&#10;output application/java&#10;---&#10;{&#10;"id": null,&#10;    "items": [&#10;        {&#10;            "exception": null,&#10;            "message": null,&#10;            "payload": {&#10;                "created": true,&#10;                "success": true,&#10;                "id": "06A4x00000QT4QCEA1",&#10;                "errors": []&#10;            },&#10;            "id": "06A4x00000QT4QCEA1",&#10;            "successful": true,&#10;            "statusCode": null&#10;        }&#10;    ],&#10;    "successful": true&#10;}&#10;]&#10;' mediaType="application/java" />
+					<munit-tools:attributes value="#[{statuCode:201}]" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+        </munit:behavior>
+		<munit:execution>
+			<http:request method="POST" doc:name="CaseRequest" doc:id="497323db-d221-4692-8012-31943688da3b" config-ref="HTTP_Request_Configuration" path="/case">
+				<http:headers><![CDATA[#[{"X-Request-ID":"ee83ff80-9f8b-11ea-9440-38f9d38d94e6","client_secret":"b306DACB094f3244720g09B80E23434e","client_id":"15283cf2d08e4676a65372510e99f032","Content-Type":"application/json"}]]]></http:headers>
+			</http:request>
+        </munit:execution>
+		<munit:validation>
+            <munit-tools:assert-that expression="#[output application/java ---write(payload, 'application/json') as String]" is="#[MunitTools::equalTo(MunitTools::getResourceAsString('scaffolder/response/post_201_case_application_json.json'))]" message="The response payload is not correct!" doc:name="Assert That - Payload is Expected" />
+        </munit:validation>
+    </munit:test>
+</mule>

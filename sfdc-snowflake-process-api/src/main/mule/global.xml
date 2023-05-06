@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tls="http://www.mulesoft.org/schema/mule/tls"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/tls http://www.mulesoft.org/schema/mule/tls/current/mule-tls.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+	
+	<tls:context name="TLS_Context" doc:name="TLS Context" doc:id="57721766-706d-459d-94c5-df37166b0522" >
+		<tls:trust-store insecure="true" />
+		<tls:key-store type="pkcs12" path="dirohub.p12" keyPassword="REPLACE" password="REPLACE" />
+	</tls:context>
+</mule>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd">
+	<global-property doc:name="Global Property" doc:id="87a3f80e-028e-4f62-85c6-0e5315c2a0ec" name="env" value="${env}" />
+	<configuration-properties doc:name="Configuration properties" doc:id="6d8740e6-0b32-4939-bb8a-6e9d0a245d7b" file="${env}.properties" />
+	<secure-properties:config name="Secure_Properties_Config" doc:name="Secure Properties Config" doc:id="e1048188-6c42-4806-9a40-a0de92cc848e" file="${env}.properties" key="${key}" />
+</mule>

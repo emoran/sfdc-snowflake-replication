@@ -1,0 +1,95 @@
+#%RAML 1.0
+title: support-sfdc-system-api
+description: System API for Salesforce ingestion
+baseUri:  https://{host}:{port}/api/sfdc/{version}
+protocols:
+  - HTTPS
+version: 1
+
+traits:
+  hasRequestID: !include exchange_modules/3b0241bf-e077-4660-b07d-8de5f63d1031/request-id-trait/1.0.0/request-id-trait.raml  
+  hasClientIdSecret: !include exchange_modules/3b0241bf-e077-4660-b07d-8de5f63d1031/clent-id-secret-trait/1.0.0/clent-id-secret-trait.raml
+
+types:
+  anyFile:
+    type: file
+    fileTypes:
+      - "*/*"
+
+/case:
+  is:
+    - hasRequestID
+    - hasClientIdSecret
+  post:
+    description: Allows to ingest case into Salesforce
+    body:
+      application/json:
+        type: !include DataTypes/case.raml
+    responses:
+      201:
+        body:
+          application/json:
+
+
+/content-document:
+    is:
+    - hasRequestID
+    - hasClientIdSecret
+    post:
+      description: Create content document in Salesforce
+      body:
+        multipart/form-data:
+          description: Receives a file and 
+          properties:
+            sfdcId: string
+            file:
+            type: file          
+
+/getUpdatedObjects:
+  is:
+    - hasClientIdSecret
+    - hasRequestID
+  post:
+    body:
+      application/json:
+        type: object
+        properties:
+    responses:
+      200:
+        body:
+          application/json:
+            example: !include Examples/getUpdatedResponse.json
+
+/{sobject}/retrieve:
+  is:
+    - hasClientIdSecret
+    - hasRequestID
+  post:
+    body:
+      application/json:
+        type: object
+        properties:
+          ids: string
+          fields: string
+        example: !include Examples/retrieveRequestSample.json
+    responses:
+      200:
+        body:
+          application/json:
+            example: !include Examples/retrieveResponseSample.json
+
+
+/{sobject}/describe:
+  get:
+    body:
+      application/json:
+    responses:
+      200:
+        body:
+          application/json:
+            
+
+              
+            
+    
+      

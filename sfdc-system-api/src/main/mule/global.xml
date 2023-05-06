@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
+	xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties"
+	xmlns:api-gateway="http://www.mulesoft.org/schema/mule/api-gateway" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/api-gateway http://www.mulesoft.org/schema/mule/api-gateway/current/mule-api-gateway.xsd
+http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	
+	<secure-properties:config key="${secure.key}" file="${env}.secure.properties" name="test">
+		<secure-properties:encrypt algorithm="Blowfish"/>
+	</secure-properties:config>
+    
+	<configuration-properties doc:name="Configuration properties" doc:id="dce591fc-34b1-41ad-b943-aa768fd92615" file="${env}.secure.properties" />
+	<salesforce:sfdc-config name="Salesforce_Config" doc:name="Salesforce Config" doc:id="5a1291ed-e397-4753-aeac-614eefc66b41" >
+		<salesforce:basic-connection username="${sfdc.username}" password="${secure::sfdc.password}" securityToken="${secure::sfdc.token}" />
+	</salesforce:sfdc-config>
+	<configuration doc:name="Configuration" doc:id="7ad9b577-2739-4423-bde9-cfb81b0fff59" defaultErrorHandler-ref="global-error-handlingError" />
+	<error-handler name="global-error-handlingError" doc:id="5cc7f243-bbaa-469a-b7ce-c74157936a33" >
+		<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="6d2fd7ee-6c10-49b7-90b0-d76c76f0b1cc" >
+			<ee:transform doc:name="Transform Message" doc:id="2da9807f-7e4a-47f4-b0ac-e3ecce2f5323" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	errorDescription:error.description,
+	errorType: error.errorType
+}]]></ee:set-payload>
+				</ee:message>
+				<ee:variables >
+					<ee:set-variable variableName="httpStatus" ><![CDATA[%dw 2.0
+output application/json
+---
+500]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<logger level="INFO" doc:name="Logger" doc:id="945f99ca-b3dd-46f4-a699-ce73103b3191" message="#[payload]"/>
+		</on-error-continue>
+	</error-handler>
+</mule>

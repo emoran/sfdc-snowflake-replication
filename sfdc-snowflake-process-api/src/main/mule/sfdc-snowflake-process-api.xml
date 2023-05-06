@@ -1,0 +1,398 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:json-logger="http://www.mulesoft.org/schema/mule/json-logger" xmlns:snowflake="http://www.mulesoft.org/schema/mule/snowflake"
+	xmlns:batch="http://www.mulesoft.org/schema/mule/batch"
+	xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd
+http://www.mulesoft.org/schema/mule/snowflake http://www.mulesoft.org/schema/mule/snowflake/current/mule-snowflake.xsd
+http://www.mulesoft.org/schema/mule/json-logger http://www.mulesoft.org/schema/mule/json-logger/current/mule-json-logger.xsd">
+	<http:request-config name="snowflake_configuration" doc:name="HTTP Request configuration" doc:id="f1c522ba-83be-48bc-821d-d66641159915" basePath="/api/snowflake" responseTimeout="120000">
+		<http:request-connection protocol="HTTPS" host="HOST" port="9441" tlsContext="TLS_Context"/>
+	</http:request-config>
+	<http:request-config name="Salesforce_configuration" doc:name="HTTP Request configuration" doc:id="5bc01d31-f126-4893-a68a-8a2111b78c98" basePath="/api/sfdc" responseTimeout="120000">
+		<http:request-connection host="HOST" port="9441" tlsContext="TLS_Context" protocol="HTTPS"/>
+	</http:request-config>
+	<http:request-config name="Slack_Config" doc:name="HTTP Request configuration" doc:id="b4f518ed-4d6e-402c-9cae-4661704b8586" basePath="/services/TCP5RF53L/B056TF29DQ8" >
+		<http:request-connection protocol="HTTPS" host="hooks.slack.com" port="443" />
+	</http:request-config>
+	<flow name="sfdc-snowflake-process-apiFlow1" doc:id="9d23d781-d82a-46fc-a1db-b8d57223d7f8" >
+		<http:listener doc:name="Listener" doc:id="4b478b7c-441a-4741-ae0d-25e8700c5d58" config-ref="HTTP_Listener_config" path="/sfdc-snowflake/sync"/>
+		<async doc:name="Async" doc:id="d5daec44-e64e-4920-bc39-e6f44a917401" >
+			<flow-ref doc:name="retrieveControlTableRecords" doc:id="4ea88c31-79ad-46eb-84bd-6cb520f6ef2f" name="retrieveControlTableRecords" />
+		</async>
+		<ee:transform doc:name="Transform Message" doc:id="c6a9868d-7c7a-4007-aa10-938708a14269" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	requestId: correlationId,	
+	success:true,
+	message: "Sync started"
+}
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="sfdc-snowflake-process-apiFlow" doc:id="b0d0fc34-af6b-4b95-884e-a03b57c72baf" >
+		<scheduler doc:name="Run every N hours / minutes" doc:id="63567738-8b3e-42aa-9610-80179ded153e" >
+			<scheduling-strategy >
+				<fixed-frequency startDelay="100" timeUnit="DAYS"/>
+			</scheduling-strategy>
+		</scheduler>
+		<set-variable value="#[correlationId]" doc:name="transactionId" doc:id="357dd2c9-29c7-4b7f-8fd3-6a473f32566f" variableName="transactionId"/>
+		<logger level="INFO" doc:name="Logger" doc:id="5f11a54d-cb81-4ac1-b224-caf018d0f686" message="Start Replication Job"/>
+		<flow-ref doc:name="retrieveControlTableRecords" doc:id="6b3cda62-1f1f-471d-9f70-9ff19cd6d4ea" name="retrieveControlTableRecords"/>
+	</flow>
+	<flow name="retrieveControlTableRecords" doc:id="f873d03e-7b07-4cea-bdd2-331bac2a2be1" >
+		<http:request method="GET" doc:name="Query Snowflake control table" doc:id="f646877a-7243-45f7-8be5-683b728c818a" config-ref="snowflake_configuration" path="/query">
+			<http:headers ><![CDATA[#[output application/java
+---
+{
+	"X-Request-ID" : vars.transactionId
+}]]]></http:headers>
+			<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"query" : "Select * from control"
+}]]]></http:query-params>
+		</http:request>
+		<ee:transform doc:name="map results" doc:id="ef0de6cf-6e94-4878-8524-deb2b5c5b5a5" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="46d62865-5508-4227-a170-5811cb01bff0" message="total tables to process: #[sizeOf(payload)]"/>
+		<foreach doc:name="Loop over each table" doc:id="b4e8335f-37a2-4186-aaf7-b202abc28336" >
+			<ee:transform doc:name="Ignore Columns" doc:id="bd60e8de-703b-46bb-a2f6-77474d517a35" >
+				<ee:message />
+				<ee:variables >
+					<ee:set-variable variableName="ignoreColumns" ><![CDATA[%dw 2.0
+output application/java
+---
+payload.IGNOREFIELDS default "" splitBy(',')]]></ee:set-variable>
+					<ee:set-variable variableName="tableName" ><![CDATA[%dw 2.0
+output application/java
+---
+payload.TABLENAME]]></ee:set-variable>
+					<ee:set-variable variableName="lastReplicationDate" ><![CDATA[%dw 2.0
+output application/java
+---
+payload.LASTREPLICATIONDATE]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<flow-ref doc:name="describeSalesforceObject" doc:id="e262c774-b438-405b-a2cf-dff0bde30cee" name="describeSalesforceObject"/>
+			<flow-ref doc:name="retrieveReplicationData" doc:id="19c41ec8-8d36-489e-84de-49c7f741bc37" name="retrieveReplicationData"/>
+		</foreach>
+	</flow>
+	<flow name="describeSalesforceObject" doc:id="ae27c047-0a31-4591-a46d-0d5bae83c292" >
+		<logger level="INFO" doc:name="Logger" doc:id="7b236402-c348-494c-8df5-b523b4be8b08" message="Describe Salesforce Table"/>
+		<http:request method="GET" doc:name="Salesforce Describe Sobject" doc:id="cf0dc585-8075-44df-af3c-86fed4addddb" config-ref="Salesforce_configuration" path="/{sobject}/describe" outputMimeType="application/json">
+			<http:headers ><![CDATA[#[output application/java
+---
+{
+	"X-Request-ID" : vars.transactionId,
+	"content-type" : "application/json"
+}]]]></http:headers>
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	"sobject" : vars.tableName
+}]]]></http:uri-params>
+		</http:request>
+		<ee:transform doc:name="Collect FIelds" doc:id="48cc40f3-ef76-44b7-9a69-013a56cc1836" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+var dropThese = vars.ignoreColumns
+---
+payload.fields filter (not (dropThese contains $."name")) map ((item, index) -> {
+    name: item.name,
+    "type": item."type"
+})]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="tableFields" ><![CDATA[%dw 2.0
+output application/java
+var dropThese = vars.ignoreColumns
+---
+(payload.fields filter (not (dropThese contains $."name")) map ((item, index) -> {
+    name: item.name,
+    "type": item."type"
+})).name]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+	</flow>
+	<flow name="retrieveReplicationData" doc:id="6f51e906-71ee-4c15-a7ed-69c38ab3a944" >
+		<ee:transform doc:name="request Payload" doc:id="a48f0f6a-d414-4776-8adc-a5e5ff1126b4" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    "startDate":vars.lastReplicationDate - |P1D| default now() - |P1D| as String {format : "yyyy-MM-dd'T'00:00:00"}, 
+    "endDate":now() + |P1D|
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<http:request method="POST" doc:name="Salesforce Get Updated Objects" doc:id="9b011546-c879-472c-a869-957c1b39d86c" config-ref="Salesforce_configuration" path="/getUpdatedObjects" outputMimeType="application/json" >
+			<http:headers ><![CDATA[#[output application/java
+---
+{
+	"client_id" : "2131",
+	"client_secret":"234424",
+	"content-type" : "application/json",
+	"X-Request-ID":vars.transactionId
+}]]]></http:headers>
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	"sobject" : vars.tableName
+}]]]></http:uri-params>
+		</http:request>
+		<flow-ref doc:name="writeHeaders" doc:id="32388b82-af65-4bff-a6fd-14a0abd3c866" name="writeHeaders" target="tempHeader"/>
+		<set-payload value="#[%dw 2.0&#10;output application/java&#10;---&#10;payload.ids]" doc:name="IDS" doc:id="48719cfc-fa68-4e84-acb5-8a1df5c27e28" />
+		<logger level="INFO" doc:name="Logger" doc:id="7d48bf00-23e3-4f7f-aeca-aa2e958facba" message="Total records to process: #[sizeOf(payload)]"/>
+		<batch:job jobName="sfdc-replication-syncBatch_Job" doc:id="79e7ac20-f600-4987-805c-464f69fdffeb" >
+			<batch:process-records >
+				<batch:step name="Batch_Step" doc:id="3892c7a6-bb68-4245-8db1-e75e81f9b248" >
+					<set-variable value="#[correlationId]" doc:name="transactionId" doc:id="d8f70043-4640-46d2-9c41-438703dbc35e" variableName="transactionId" />
+					<batch:aggregator doc:name="Commit 2K records" doc:id="483a8cc5-b98d-4d6a-b465-e169b47f0237" size="2000" >
+						<set-variable value="#[false]" doc:name="writeHeaders false" doc:id="ff979008-29c5-4718-bf56-77c21539be24" variableName="writeHeaders" />
+						<flow-ref doc:name="aggregaeRecordResult" doc:id="ce1f2a45-3efa-479f-be80-e87af146e8a0" name="aggregaeRecordResult" />
+					</batch:aggregator>
+				</batch:step>
+			</batch:process-records>
+			<batch:on-complete >
+				<logger level="INFO" doc:name="Logger" doc:id="f4b62925-a25c-4429-a043-b2bac1bdacd8" message="File completed" />
+				<choice doc:name="Choice" doc:id="1379f213-1b1e-46e3-a560-280c038ba46d" >
+					<when expression="#[payload.totalRecords &gt; 0]" >
+						<flow-ref doc:name="replicateData" doc:id="079b0a9d-6c0e-43bd-b592-7f9a92893f84" name="replicateData" />
+					</when>
+					<otherwise >
+						<logger level="INFO" doc:name="Logger" doc:id="09b15b6c-97fa-45c0-88c5-50f8cfa7a323" message="No records to process." />
+					</otherwise>
+				</choice>
+				<logger level="INFO" doc:name="Logger" doc:id="641c17bb-35d6-4008-a14e-d55e26c007b0" message="Slack notification #[message]"/>
+				<ee:transform doc:name="Notificaction request" doc:id="f6c403fa-2bd5-4327-bc1f-e66b1d9a45cc" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"attachments":[{
+		"pretext": " SFDC Snowflake Process API - Staging" as String ++ " )",
+		"color" : "#09e12f",
+		"fields" : [{
+			"title" : "Details",
+			"value" : payload,
+			"short" : false
+		}]
+	}],
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<http:request method="POST" doc:name="Request" doc:id="e466c36c-4240-4c35-aa7b-0306b4965fc9" config-ref="Slack_Config" path="/BASE"/>
+			</batch:on-complete>
+		</batch:job>
+	</flow>
+	<flow name="writeHeaders" doc:id="32998dd2-da2b-4ef1-8a74-0b331e4d281c" >
+		<ee:transform doc:name="firstRecord" doc:id="e331bf49-14c8-4bd3-a9dc-36465d325b68" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+[payload.ids[0]]]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="writeHeaders" ><![CDATA[%dw 2.0
+output application/java
+---
+true]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<flow-ref doc:name="aggregaeRecordResult" doc:id="8c7955fb-7aab-4b39-9c5b-2bfd1402e80f" name="aggregaeRecordResult" />
+	</flow>
+	<flow name="aggregaeRecordResult" doc:id="9f51a0e7-bb02-430e-a763-ce55924a343d" >
+		<ee:transform doc:name="Retrive Request" doc:id="fcf9304c-3810-49c4-bd97-651bb6643dfd" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	fields:((vars.tableFields  map {name: $}).name orderBy $) joinBy "," ,
+	ids: payload map $ joinBy ","
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<http:request method="POST" doc:name="Salesforce Get Updated Objects" doc:id="21f63fc4-5f43-436e-a75e-c4fe8d6e4fe9" config-ref="Salesforce_configuration" path="/{sobject}/retrieve" outputMimeType="application/json">
+			<http:headers><![CDATA[#[output application/java
+---
+{
+	"client_id" : "2131",
+	"client_secret":"234424",
+	"content-type" : "application/json",
+	"X-Request-ID": vars.transactionId
+}]]]></http:headers>
+			<http:uri-params><![CDATA[#[output application/java
+---
+{
+	"sobject" : vars.tableName
+}]]]></http:uri-params>
+		</http:request>
+		<ee:transform doc:name="Fix output | remove type" doc:id="04988365-58af-442d-ac03-ce98347c5497" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+(payload map ((record) -> 
+  record mapObject ((value, key) -> {
+  	 ((key): value replace "\n" with "" replace "," with "") 
+  } - "type" ) 
+)) distinctBy ($)]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<ee:transform doc:name="Order Records" doc:id="87231293-5689-464c-94bf-783d924e2b13" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+payload map ($ orderBy $$)]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<choice doc:name="Write Headers" doc:id="f60c1f06-b60b-4b75-9411-807cde9fa266" >
+			<when expression="#[vars.writeHeaders == true]" >
+				<ee:transform doc:name="to CSV format" doc:id="5b9932c5-2554-4a17-bbd2-75638da6b926" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/csv header=true
+---
+payload]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="to CSV format" doc:id="7a7bbf44-8f1c-4ca1-b4a5-33c454919032" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/csv header=false
+---
+payload]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+		<logger level="INFO" doc:name="Logger" doc:id="1f8f2083-9eac-484c-bb43-89b729816fd1" message="Filling CSV"/>
+		<file:write doc:id="b444aa84-2940-4a66-be54-66a16e3a4077" path='#["/tmp/replication/" ++ vars.tableName ++ ".csv"]' mode="APPEND" doc:name="Write" />
+	</flow>
+	<flow name="replicateData" doc:id="234d2abc-f7b0-4829-8a14-ce466eea4002" >
+		<http:request method="GET" doc:name="Truncate temporal table." doc:id="73ea648e-5475-4e16-8a00-641319566004" config-ref="snowflake_configuration" path="/truncate" >
+			<http:headers ><![CDATA[#[output application/java
+---
+{
+	"X-Request-ID" :  vars.transactionId
+}]]]></http:headers>
+			<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"table" : "AcquiredAccount__c_temp"
+}]]]></http:query-params>
+		</http:request>
+		<logger level="INFO" doc:name="Logger" doc:id="7e0b5646-92d2-4044-82b1-8efa02d74c59" message='#["Table truncated"]'/>
+		<file:read doc:name="Read Local file" doc:id="65e70879-e6d3-42f8-8083-cc199734287c" path="/tmp/replication/ACQUIREDACCOUNT__C.csv" />
+		<ee:transform doc:name="file to Java" doc:id="59773038-fe65-474c-a150-4d15461c668c" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+import try, fail from dw::Runtime
+output application/java
+
+
+fun isDate(value: Any): Boolean = try(() -> value as Date).success
+fun getDate(value: Any): Date | Null | Any = ( if ( isDate(value) ) value 
+            as Date as String else value )
+
+---
+(payload map (item,index) ->{
+    (item mapObject ((value, key, index) -> {
+        (key):(getDate(value))
+    } ))
+} -- vars.ignoreColumns )]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<ee:transform doc:name="Remove duplicate ids" doc:id="159cf081-6423-465d-bc9d-8b39ebc3723a" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload distinctBy $.Id]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="fieldsMap" ><![CDATA[%dw 2.0
+output application/json
+---
+[payload[0]]]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="76481fec-b9a9-4067-8996-ed9e6bcaee30" message="Inserting #[sizeOf(payload)] records"/>
+		<http:request method="POST" doc:name="Insert Data" doc:id="9eb6330b-990b-4e57-9ad8-4015b8148179" config-ref="snowflake_configuration" path="/insert" >
+			<http:headers ><![CDATA[#[output application/java
+---
+{
+	"X-Request-ID" : vars.transactionId
+}]]]></http:headers>
+			<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"table" : "AcquiredAccount__c_temp"
+}]]]></http:query-params>
+		</http:request>
+		<logger level="INFO" doc:name="Logger" doc:id="efb5c883-2e9b-454f-a6ef-a436e3fc6235" message='#["Data Inserted"]'/>
+		<http:request method="POST" doc:name="Merge" doc:id="78225f29-d352-40dd-9104-1608a2cd8094" config-ref="snowflake_configuration" path="/merge" >
+			<http:body ><![CDATA[#[vars.fieldsMap]]]></http:body>
+			<http:headers ><![CDATA[#[output application/java
+---
+{
+	"X-Request-ID" : vars.transactionId
+}]]]></http:headers>
+			<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"table" : "AcquiredAccount__c_temp"
+}]]]></http:query-params>
+		</http:request>
+		<logger level="INFO" doc:name="Logger" doc:id="f85b4bdc-d7a7-4ab4-b4bc-98480e39ab43" message='#["Merge completed"]'/>
+		<flow-ref doc:name="updateReplicationDate" doc:id="f53949bb-8041-44fa-a28c-9bbe6cc93128" name="updateReplicationDate"/>
+	</flow>
+	<flow name="updateReplicationDate" doc:id="8c4b2b81-ab84-4935-a2f6-45233549368b" >
+		<ee:transform doc:name="Transform Message" doc:id="23cf8a55-b767-410a-be3d-1d9a2efc75ae" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	replicationDate: now() as String {format:'yyyy-MM-dd\'T\'00:00:00'}
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<http:request method="PUT" doc:name="Update Replication Date" doc:id="7f413d1f-bc6a-43cc-93ce-2017981f189d" config-ref="snowflake_configuration" path="/replication" >
+			<http:headers ><![CDATA[#[output application/java
+---
+{
+	"X-Request-ID" : vars.transactionId
+}]]]></http:headers>
+			<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"table" : "AcquiredAccount__c_temp"
+}]]]></http:query-params>
+		</http:request>
+		<logger level="INFO" doc:name="Logger" doc:id="9323072c-652f-4891-81f1-56bb60de8813" message='#["Replication Date updated."]'/>
+	</flow>
+</mule>

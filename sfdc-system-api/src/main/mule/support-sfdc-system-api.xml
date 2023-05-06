@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd  http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd">
+    <apikit:config name="support-sfdc-system-api-config" api="support-sfdc-system-api.raml" outboundHeadersMapName="outboundHeaders" httpStatusVarName="httpStatus" />
+    <flow name="support-sfdc-system-api-main">
+        <http:listener path="/api/sfdc/*" config-ref="HTTP_Listener_config">
+            <http:response statusCode="#[vars.httpStatus default 201]">
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body><![CDATA[#[payload]]]></http:body>
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:router config-ref="support-sfdc-system-api-config" />
+        <error-handler>
+            <on-error-propagate type="APIKIT:BAD_REQUEST">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message: "Bad request",
+	detailedMessage: error.exception.message
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus"><![CDATA[400]]></ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:METHOD_NOT_ALLOWED">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Method not allowed"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">405</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_ACCEPTABLE">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not acceptable"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">406</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:UNSUPPORTED_MEDIA_TYPE">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Unsupported media type"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">415</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_IMPLEMENTED">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not Implemented"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">501</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    <flow name="post:\case:application\json:support-sfdc-system-api-config" doc:id="c37728d5-8231-4914-9997-c0ed1cf0c5ad">
+        <ee:transform doc:name="Incoming request" doc:id="4c23c126-b581-4f60-91cc-ee9b58861c86">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+input payload application/json
+output application/java
+---
+payload]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <salesforce:create doc:name="Create Case" doc:id="c862c28f-ce5d-4f2b-aa74-3f1fe89e8320" config-ref="Salesforce_Config" type="Case" />
+        <ee:transform doc:name="Mapping response" doc:id="43180a23-b359-4a90-accd-5d4a1f2cb78f">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload.items]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+    <flow name="post:\content-document:multipart\form-data:support-sfdc-system-api-config">
+        <ee:transform doc:name="Get Request Parts" doc:id="ed275d9b-8d3b-4418-9de7-81e3f000047f">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+payload.parts]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <ee:transform doc:name="Request to Content Document" doc:id="df055a9c-7e83-40f1-ae96-2636197a4f3d">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+import * from dw::core::Binaries
+output application/java
+---
+[{
+	PathOnClient: payload.file.headers["Content-Disposition"].filename,
+	VersionData: payload.file.content as Binary {
+		class: "byte[]"
+	}
+}]]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="sfdcRecordId"><![CDATA[%dw 2.0
+output application/java
+---
+payload.sfdcId.content as String]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <salesforce:upsert objectType="ContentVersion" externalIdFieldName="Id" doc:name="Upload File" doc:id="df28173d-3ee8-443d-b1bb-4180fe4194ef" config-ref="Salesforce_Config" />
+        <salesforce:query doc:name="Get Content Document Id" doc:id="b4495e0c-4894-46e5-b833-211786ad98b3" config-ref="Salesforce_Config">
+            <salesforce:salesforce-query><![CDATA[SELECT Id,ContentDocumentId FROM ContentVersion WHERE Id = ':cvId']]></salesforce:salesforce-query>
+            <salesforce:parameters><![CDATA[#[output application/java
+---
+{
+	"cvId" : payload.items[0].id
+}]]]></salesforce:parameters>
+        </salesforce:query>
+        <ee:transform doc:name="Map Document Link" doc:id="94a13de3-f34b-48f8-8f4e-c097839f84ec">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+
+output application/java
+---
+payload map ( payload01 , indexOfPayload01 ) -> {
+	LinkedEntityId: vars.sfdcRecordId,
+	ContentDocumentId: payload01.ContentDocumentId
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <salesforce:upsert objectType="ContentDocumentLink" externalIdFieldName="Id" doc:name="Create Content Document Link" doc:id="28e1523e-93ea-47a5-b07c-5fd3ac8835cb" config-ref="Salesforce_Config" />
+        <ee:transform doc:name="Response" doc:id="6e41f3a3-03ca-4c59-a0bb-b59adda380b5">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload.items]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+    <flow name="post:\getUpdatedObjects:application\json:support-sfdc-system-api-config">
+        <salesforce:get-updated objectType="ACQUIREDACCOUNT__C" doc:name="Get updated objects" doc:id="80af761a-0dbd-45ed-8fe5-924f6da649ea" config-ref="Salesforce_Config" startDate="#[import * from dw::core::Periods&#xA;---&#xA;((payload.startDate &gt;&gt; 'UTC') as LocalDateTime {format : &quot;yyyy-MM-dd’T’HH:mm:ss-07:00&quot;})]" endDate="#[(payload.endDate &gt;&gt; &quot;UTC&quot;) as LocalDateTime {format : &quot;yyyy-MM-dd'T'HH:mm&quot;}]" />
+        <ee:transform doc:name="Response" doc:id="44fa5bf3-16b9-406e-88ed-4f1482356e9e">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+    <flow name="post:\(sobject)\retrieve:application\json:support-sfdc-system-api-config">
+        <ee:transform>
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+{
+	fields:payload.fields splitBy(","),
+	ids:payload.ids splitBy(",")
+}]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="sobject"><![CDATA[attributes.uriParams.'sobject']]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <salesforce:retrieve type="#[vars.sobject]" doc:name="Retrieve" doc:id="4b862fe8-001a-4c82-930e-35dd38d64476" config-ref="Salesforce_Config" />
+        <ee:transform doc:name="Response" doc:id="08d6fc99-28c0-4fb6-bb14-2d9bcc2e1be3">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+    <flow name="get:\(sobject)\describe:application\json:support-sfdc-system-api-config">
+        <ee:transform>
+            <ee:variables>
+                <ee:set-variable variableName="sobject">attributes.uriParams.'sobject'</ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+		<salesforce:describe-sobject type="#[vars.sobject]" doc:name="Describe sobject" doc:id="c47503e3-69a3-4c6d-ad8f-0b1cbf7e1629" config-ref="Salesforce_Config" />
+		<ee:transform doc:name="Transform Message" doc:id="c9a5dd70-a36a-4013-ac80-0f7853de6825" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+    </flow>
+
+</mule>
